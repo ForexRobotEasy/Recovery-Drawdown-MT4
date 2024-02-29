@@ -1,0 +1,114 @@
+mql5
+//+------------------------------------------------------------------+
+//| Recovery Drawdown MT4                                            |
+//| Developer: Forex Robot Easy Team                                 |
+//| Site: forexroboteasy.com                                         |
+//+------------------------------------------------------------------+
+
+// Define input parameters
+input double MaxLossPercent = 10; // Maximum loss percentage to trigger recovery
+input double ProfitTarget = 5; // Minimum profit percentage to secure profits
+
+// Define global variables
+double AccountBalance;
+double MaxDrawdown;
+double TotalProfit;
+
+//+------------------------------------------------------------------+
+//| Expert Advisor initialization function                           |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Get account balance
+   AccountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+
+   // Calculate maximum drawdown
+   MaxDrawdown = AccountInfoDouble(ACCOUNT_EQUITY) - AccountBalance;
+
+   // Calculate total profit
+   TotalProfit = AccountInfoDouble(ACCOUNT_PROFIT);
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert Advisor start function                                     |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Close winning trades to secure profits
+   CloseWinningTrades();
+
+   // Use secured profits to close losing trades and reduce losses
+   CloseLosingTrades();
+
+   // Check if recovery is complete
+   if (AccountInfoDouble(ACCOUNT_EQUITY) >= AccountBalance)
+   {
+      Print('Recovery drawdown strategy completed successfully.');
+      ExpertRemove();
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Function to close winning trades                                  |
+//+------------------------------------------------------------------+
+void CloseWinningTrades()
+{
+   int total = OrdersTotal();
+   for (int i = total - 1; i >= 0; i--)
+   {
+      if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         // Check if trade is winning
+         if (OrderProfit() > 0)
+         {
+            // Close winning trade
+            if (!OrderClose(OrderTicket(), OrderLots(), OrderClosePrice(), Slippage))
+            {
+               Print('Failed to close winning trade: ', GetLastError());
+            }
+            else
+            {
+               // Update total profit
+               TotalProfit += OrderProfit();
+            }
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Function to close losing trades                                   |
+//+------------------------------------------------------------------+
+void CloseLosingTrades()
+{
+   int total = OrdersTotal();
+   for (int i = total - 1; i >= 0; i--)
+   {
+      if (OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         // Check if trade is losing
+         if (OrderProfit() < 0)
+         {
+            // Calculate loss percentage
+            double lossPercent = MathAbs(OrderProfit()) / AccountBalance * 100;
+
+            // Check if loss exceeds maximum loss percentage
+            if (lossPercent >= MaxLossPercent)
+            {
+               // Close losing trade
+               if (!OrderClose(OrderTicket(), OrderLots(), OrderClosePrice(), Slippage))
+               {
+                  Print('Failed to close losing trade: ', GetLastError());
+               }
+               else
+               {
+                  // Update total profit
+                  TotalProfit += OrderProfit();
+               }
+            }
+         }
+      }
+   }
+}
